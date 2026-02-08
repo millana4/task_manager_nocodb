@@ -1,0 +1,40 @@
+# Виртуальное окружение
+.venv/
+venv/
+
+# Файлы окружения
+.env
+
+# PyCharm и другие IDE
+.idea/
+.vscode/
+
+# Файлы Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Бинарные файлы
+*.so
+
+# Файлы логов и отладочные
+*.log
+debug.pdf
+
+# Базы данных и временные файлы
+*.sqlite3
+*.db
+*.sql
+
+# Компиляция и сборка
+build/
+dist/
+*.egg-info/
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+
+# Кэш pip
+pip-wheel-metadata/
