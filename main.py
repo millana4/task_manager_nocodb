@@ -1,6 +1,7 @@
 import os
 import logging
 from datetime import datetime, timedelta
+from time import sleep
 from typing import List, Dict
 import pytz
 from dotenv import load_dotenv
@@ -27,8 +28,7 @@ class NocoDBClient:
     def __init__(self):
         self.api_token = os.getenv('NOCODB_API_TOKEN')
         self.table_id = os.getenv('NOCODB_TABLE_ID')
-        self.base_url = os.getenv('NOCODB_BASE_URL')
-        self.view_id = os.getenv('NOCODB_VIEW_ID')
+        self.base_url = os.getenv('NOCODB_BASE_URL').rstrip('/')
 
         if not all([self.api_token, self.table_id, self.base_url]):
             raise ValueError("Missing NocoDB configuration in .env file")
@@ -38,21 +38,18 @@ class NocoDBClient:
             'Content-Type': 'application/json'
         }
 
-        # Для отладки
-        logger.info(f"NocoDB config: table_id={self.table_id}, view_id={self.view_id}")
+        logger.info(f"NocoDB config: table_id={self.table_id}")
 
     def get_all_tasks(self) -> List[Dict]:
         try:
-            url = f"{self.base_url}/tables/{self.table_id}/records"
+            url = f"{self.base_url}/api/v2/tables/{self.table_id}/records"
 
             logger.info(f"Fetching tasks from URL: {url}")
-            logger.info(f"Table ID: {self.table_id}, View ID: {self.view_id}")
 
             params = {
                 'offset': 0,
                 'limit': 1000,
-                'where': '',
-                'viewId': self.view_id,
+                'where': ''
             }
 
             response = requests.get(url, headers=self.headers, params=params)
@@ -60,23 +57,9 @@ class NocoDBClient:
 
             if response.status_code == 200:
                 data = response.json()
-                logger.info(f"Successfully fetched {len(data.get('list', []))} tasks")
+                tasks = data.get('list', [])
+                logger.info(f"Successfully fetched {len(tasks)} tasks")
 
-                # Преобразуем данные в нужный формат
-                tasks = []
-                for task in data.get('list', []):
-                    # Извлекаем значения из полей
-                    task_data = {}
-                    for key, value in task.items():
-                        if key not in ['Id', 'created_at', 'updated_at'] and not key.startswith('_'):
-                            # Проверяем, является ли значение словарем с полем 'value'
-                            if isinstance(value, dict) and 'value' in value:
-                                task_data[key] = value['value']
-                            else:
-                                task_data[key] = value
-                    tasks.append(task_data)
-
-                logger.info(f"Processed {len(tasks)} tasks")
                 if tasks:
                     logger.info(f"Sample task: {json.dumps(tasks[0], indent=2, ensure_ascii=False)}")
 
@@ -110,7 +93,6 @@ class TaskManager:
 
         tasks_for_today = []
         for task in all_tasks:
-            # Преобразуем данные задачи
             task_done = self._parse_bool(task.get('Done'))
             task_date = task.get('Date')
 
@@ -171,9 +153,9 @@ class TaskManager:
 
         # Название задачи
         if task_name := task.get('Task'):
-            parts.append(f"• {task_name}")
+            parts.append(f"🔹 {task_name}")
         else:
-            parts.append("• Без названия")
+            parts.append("🔹 Без названия")
 
         # Курс
         if course := task.get('Course'):
@@ -186,13 +168,16 @@ class TaskManager:
         # Дедлайн
         if deadline := task.get('Deadline'):
             if isinstance(deadline, str):
-                # Обрезаем время, если оно есть
                 deadline_date = deadline[:10] if len(deadline) >= 10 else deadline
                 parts.append(f"  Дедлайн: {deadline_date}")
 
-        # Длительность
+        # Длительность (округляем до 1 знака)
         if duration := task.get('Duration'):
-            parts.append(f"  Длительность: {duration/3600} ч.")
+            if isinstance(duration, (int, float)):
+                hours = duration / 3600
+                parts.append(f"  Длительность: {hours:.1f} ч.")
+            else:
+                parts.append(f"  Длительность: {duration} ч.")
 
         # Дней до дедлайна (только для уведомлений о дедлайнах)
         if days_until := task.get('_days_until'):
@@ -261,7 +246,7 @@ class TelegramNotifier:
             tasks = self.task_manager.get_tasks_for_date(today)
 
             if tasks:
-                message_lines = ["<b>Анна, приветствую!</b>\nНа сегодня запланированы следующие задачи:\n"]
+                message_lines = ["<b>Анна, приветствую 👋 </b>\n\nНа сегодня запланированы следующие задачи:\n"]
 
                 for task in tasks:
                     formatted_task = self.task_manager.format_task(task)
@@ -270,7 +255,7 @@ class TelegramNotifier:
 
                 message = "\n".join(message_lines).strip()
             else:
-                message = "<b>Анна, приветствую!</b>\nНа сегодня запланированных задач нет."
+                message = "<b>Анна, приветствую 👋 </b>\nНа сегодня запланированных задач нет.\n 💃💃💃 👻"
 
             return self.send_message_sync(message)
         except Exception as e:
@@ -296,13 +281,13 @@ class TelegramNotifier:
                     tasks_by_day[days] = []
                 tasks_by_day[days].append(task)
 
-            message_lines = ["<b>Внимание! Приближаются дедлайны:</b>\n"]
+            message_lines = ["<b>❗️Внимание: приближаются дедлайны</b>\n"]
 
             for days in sorted(tasks_by_day.keys()):
                 day_text = {
-                    0: "<b>Сегодня:</b>",
-                    1: "<b>Завтра:</b>",
-                    2: "<b>Послезавтра:</b>"
+                    0: "<b>------ Сегодня -----\n</b>",
+                    1: "<b>------- Завтра ------\n</b>",
+                    2: "<b>----- Послезавтра -----\n</b>"
                 }.get(days, f"<b>Через {days} дней:</b>")
 
                 message_lines.append(day_text)
@@ -336,10 +321,12 @@ def create_scheduler(notifier: TelegramNotifier) -> BackgroundScheduler:
         replace_existing=True
     )
 
-    # Уведомление о дедлайнах в 9:05
+    sleep(5)
+
+    # Уведомление о дедлайнах в 9:00
     scheduler.add_job(
         notifier.send_deadline_notification_sync,
-        trigger=CronTrigger(hour=9, minute=5),
+        trigger=CronTrigger(hour=9, minute=0),
         id='deadlines',
         name='Send deadline notification',
         replace_existing=True
