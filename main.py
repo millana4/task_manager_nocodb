@@ -315,7 +315,7 @@ def create_scheduler(notifier: TelegramNotifier) -> BackgroundScheduler:
     # Ежедневное уведомление в 9:00
     scheduler.add_job(
         notifier.send_daily_tasks_sync,
-        trigger=CronTrigger(hour=9, minute=0),
+        trigger=CronTrigger(hour=9, minute=0, timezone=pytz.timezone('Europe/Moscow')),
         id='daily_tasks',
         name='Send daily tasks notification',
         replace_existing=True
@@ -326,7 +326,7 @@ def create_scheduler(notifier: TelegramNotifier) -> BackgroundScheduler:
     # Уведомление о дедлайнах в 9:00
     scheduler.add_job(
         notifier.send_deadline_notification_sync,
-        trigger=CronTrigger(hour=9, minute=0),
+        trigger=CronTrigger(hour=9, minute=0, timezone=pytz.timezone('Europe/Moscow')),
         id='deadlines',
         name='Send deadline notification',
         replace_existing=True
