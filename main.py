@@ -298,6 +298,7 @@ class TelegramNotifier:
                     task_copy.pop('_days_until', None)
                     formatted_task = self.task_manager.format_task(task_copy)
                     message_lines.append(formatted_task)
+                    message_lines.append("")
 
                 message_lines.append("")  # Пустая строка между группами
 
